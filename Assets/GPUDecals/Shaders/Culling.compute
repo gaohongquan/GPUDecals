@@ -1,0 +1,201 @@
+
+#include "Culling.cginc"
+
+#define FLT_MAX  3.402823466e+38
+
+#pragma kernel GenerateClusterCS NUM_THREADS=1
+#pragma kernel ClusterCullingCS NUM_THREADS=1
+#pragma kernel CalculateDepthBoundsCS NUM_THREADS=8
+#pragma kernel TilebasedCullingCS NUM_THREADS=1
+
+groupshared float ldsZMin[NUM_THREADS * NUM_THREADS];
+groupshared float ldsZMax[NUM_THREADS * NUM_THREADS];
+
+
+[numthreads(NUM_THREADS, NUM_THREADS, NUM_THREADS)]
+void GenerateClusterCS(uint3 globalIdx : SV_DispatchThreadID, uint3 localIdx : SV_GroupThreadID, uint3 groupIdx : SV_GroupID)
+{
+    uint3 clusterIndex3D = groupIdx.xyz;
+    uint clusterIndex1D = clusterIndex3D.x + clusterIndex3D.y * g_ClusterNumX + clusterIndex3D.z * (g_ClusterNumX * g_ClusterNumY);
+
+    float depthMinZ = pow(((float)clusterIndex3D.z / (float)g_ClusterNumZ), g_ClusterRate) * g_zCullingRange;
+    float depthMaxZ = pow(((float)(clusterIndex3D.z + 1) / (float)g_ClusterNumZ), g_ClusterRate) * g_zCullingRange;
+
+    float eyeMinZ = depthMinZ * (_ProjectionParams.z - _ProjectionParams.y) + _ProjectionParams.y;
+    float eyeMaxZ = depthMaxZ * (_ProjectionParams.z - _ProjectionParams.y) + _ProjectionParams.y;
+
+    float lineMinZ = eyeMinZ * _ProjectionParams.w;
+    float lineMaxZ = eyeMaxZ * _ProjectionParams.w;
+
+    float2 tlndc = float2(clusterIndex3D.x / (float)g_ClusterNumX, clusterIndex3D.y / (float)g_ClusterNumY);
+    float2 brndc = float2((clusterIndex3D.x + 1) / (float)g_ClusterNumX, (clusterIndex3D.y + 1) / (float)g_ClusterNumY);
+
+    float3 frustumTL = ComputeViewSpacePosition(tlndc,1.0, unity_CameraInvProjection);
+    float3 frustumBR = ComputeViewSpacePosition(brndc,1.0, unity_CameraInvProjection);
+
+    float2 frustumTopLeftAtBack = frustumTL.xy * lineMaxZ;
+    float2 frustumBottomRightAtBack = frustumBR.xy * lineMaxZ;
+    float2 frustumTopLeftAtFront = frustumTL.xy * lineMinZ;
+    float2 frustumBottomRightAtFront = frustumBR.xy * lineMinZ;
+
+    float2 frustumMinXY = min(frustumTopLeftAtBack, min(frustumBottomRightAtBack, min(frustumTopLeftAtFront, frustumBottomRightAtFront)));
+    float2 frustumMaxXY = max(frustumTopLeftAtBack, max(frustumBottomRightAtBack, max(frustumTopLeftAtFront, frustumBottomRightAtFront)));
+
+    float3 frustumAABBMin = float3(frustumMinXY.xy, -eyeMinZ);
+    float3 frustumAABBMax = float3(frustumMaxXY.xy, -eyeMaxZ);
+
+    g_CullAABBsBufferOut[clusterIndex1D].min = float4(frustumAABBMin, 1.0f);
+    g_CullAABBsBufferOut[clusterIndex1D].max = float4(frustumAABBMax, 1.0f);
+}
+
+[numthreads(NUM_THREADS, NUM_THREADS, NUM_THREADS)]
+void ClusterCullingCS(uint3 globalIdx : SV_DispatchThreadID, uint3 localIdx : SV_GroupThreadID, uint3 groupIdx : SV_GroupID)
+{
+    uint3 clusterIndex3D = groupIdx.xyz;
+    uint clusterIndex1D = clusterIndex3D.x + clusterIndex3D.y * g_ClusterNumX + clusterIndex3D.z * (g_ClusterNumX * g_ClusterNumY);
+    
+    float4 frustumAABBMid = (g_CullAABBsBuffer[clusterIndex1D].min + g_CullAABBsBuffer[clusterIndex1D].max) * 0.5f;
+    float4 frustumAABBHalfSize = abs(g_CullAABBsBuffer[clusterIndex1D].max - g_CullAABBsBuffer[clusterIndex1D].min) * 0.5f;
+
+    uint startOffset = g_PreClusterMaxNumElements * clusterIndex1D;
+    uint indexCount = 0;
+    for (uint i = 0; i < g_CullTestSpheresNum; i++)
+    {
+        float4 p = g_TestSpheresBuffer[i];
+        float  r = p.w;
+        float3 c = mul(UNITY_MATRIX_V, float4(p.xyz, 1)).xyz;
+        if (TestSphereVsAABB(c, r, frustumAABBMid, frustumAABBHalfSize))
+        {
+            g_CullIndexBufferOut[startOffset + 1 + indexCount] = i;
+            indexCount++;
+        }
+        if (indexCount == g_PreClusterMaxNumIndex)
+            break;
+    }
+    g_CullIndexBufferOut[startOffset] = indexCount;
+}
+
+
+[numthreads(NUM_THREADS, NUM_THREADS, 1)]
+void CalculateDepthBoundsCS(uint3 globalIdx : SV_DispatchThreadID, uint3 localIdx : SV_GroupThreadID, uint3 groupIdx : SV_GroupID)
+{
+    uint2 sampleIdx = globalIdx.xy * 2;
+
+    float depth00 = _CameraDepthTexture.Load(uint3(sampleIdx.x, sampleIdx.y, 0)).x;
+    float depth01 = _CameraDepthTexture.Load(uint3(sampleIdx.x, sampleIdx.y + 1, 0)).x;
+    float depth10 = _CameraDepthTexture.Load(uint3(sampleIdx.x + 1, sampleIdx.y, 0)).x;
+    float depth11 = _CameraDepthTexture.Load(uint3(sampleIdx.x + 1, sampleIdx.y + 1, 0)).x;
+
+    float viewPosZ00 = depth00;// Linear01Depth(depth00, _ZBufferParams);
+    float viewPosZ01 = depth01;// Linear01Depth(depth01, _ZBufferParams);
+    float viewPosZ10 = depth10;// Linear01Depth(depth10, _ZBufferParams);
+    float viewPosZ11 = depth11;// Linear01Depth(depth11, _ZBufferParams);
+
+    uint threadNum = localIdx.x + localIdx.y * NUM_THREADS;
+
+    {
+        float minZ00 = (viewPosZ00 != 0.f) ? viewPosZ00 : FLT_MAX;
+        float minZ01 = (viewPosZ01 != 0.f) ? viewPosZ01 : FLT_MAX;
+        float minZ10 = (viewPosZ10 != 0.f) ? viewPosZ10 : FLT_MAX;
+        float minZ11 = (viewPosZ11 != 0.f) ? viewPosZ11 : FLT_MAX;
+
+        float maxZ00 = (viewPosZ00 != 0.f) ? viewPosZ00 : 0.0f;
+        float maxZ01 = (viewPosZ01 != 0.f) ? viewPosZ01 : 0.0f;
+        float maxZ10 = (viewPosZ10 != 0.f) ? viewPosZ10 : 0.0f;
+        float maxZ11 = (viewPosZ11 != 0.f) ? viewPosZ11 : 0.0f;
+
+
+        ldsZMin[threadNum] = min(minZ00, min(minZ01, min(minZ10, minZ11)));
+        ldsZMax[threadNum] = max(maxZ00, max(maxZ01, max(maxZ10, maxZ11)));
+        GroupMemoryBarrierWithGroupSync();
+
+        uint uNumParallel = NUM_THREADS * 4;
+
+        if (threadNum < uNumParallel)
+        {
+            UNITY_UNROLL
+            for (int i = uNumParallel; i > 0; i /= 2)
+            {
+                ldsZMin[threadNum] = min(ldsZMin[threadNum], ldsZMin[threadNum + i]);
+                ldsZMax[threadNum] = max(ldsZMax[threadNum], ldsZMax[threadNum + i]);
+            }
+        }
+    }
+
+    GroupMemoryBarrierWithGroupSync();
+
+    if (threadNum == 0)
+    {
+        _DepthBoundsOut[groupIdx.xy] = float4(ldsZMin[0], ldsZMax[0], 0, 1);
+    }
+}
+
+
+[numthreads(NUM_THREADS, NUM_THREADS, 1)]
+void TilebasedCullingCS(uint3 globalIdx : SV_DispatchThreadID, uint3 groupIdx : SV_GroupID, uint3 localIdx : SV_GroupThreadID)
+{
+    float2 depthBounds = _DepthBounds.Load(uint3(groupIdx.x, groupIdx.y, 0)).xy;
+
+    float3 frustumAABBMid;
+    float3 frustumAABBHalfSize;
+    {
+        uint pxm = g_TilebasedSize * groupIdx.x;
+        uint pym = g_TilebasedSize * groupIdx.y;
+        uint pxp = g_TilebasedSize * (groupIdx.x + 1);
+        uint pyp = g_TilebasedSize * (groupIdx.y + 1);
+        uint width = g_TilebasedSize * g_TileNumX;
+        uint height = g_TilebasedSize * g_TileNumY;
+
+#if UNITY_REVERSED_Z
+        float minZ = Linear01Depth(depthBounds.y);
+        float maxZ = Linear01Depth(depthBounds.x);
+        float eyeMinZ = LinearEyeDepth(depthBounds.y);
+        float eyeMaxZ = LinearEyeDepth(depthBounds.x);
+        float2 tlndc = float2(pxm / (float)width, ((float)height - pym) / (float)height);
+        float2 brndc = float2(pxp / (float)width, ((float)height - pyp) / (float)height);
+#else
+        float minZ = Linear01Depth(depthBounds.x);
+        float maxZ = Linear01Depth(depthBounds.y);
+        float eyeMinZ = LinearEyeDepth(depthBounds.x);
+        float eyeMaxZ = LinearEyeDepth(depthBounds.y);
+        float2 tlndc = float2(pxm / (float)width, pym / (float)height);
+        float2 brndc = float2(pxp / (float)width, pyp / (float)height);
+#endif
+        float3 frustumTL = ComputeViewSpacePosition(tlndc, 1.f, unity_CameraInvProjection);
+        float3 frustumBR = ComputeViewSpacePosition(brndc, 1.f, unity_CameraInvProjection);
+
+        float2 frustumTopLeftAtBack = float2((maxZ / 1.0) * frustumTL.x, (maxZ / 1.0) * frustumTL.y);
+        float2 frustumBottomRightAtBack = float2((maxZ / 1.0) * frustumBR.x, (maxZ / 1.0) * frustumBR.y);
+        float2 frustumTopLeftAtFront = float2((minZ / 1.0) * frustumTL.x, (minZ / 1.0) * frustumTL.y);
+        float2 frustumBottomRightAtFront = float2((minZ / 1.0) * frustumBR.x, (minZ / 1.0) * frustumBR.y);
+
+        float2 frustumMinXY = min(frustumTopLeftAtBack, min(frustumBottomRightAtBack, min(frustumTopLeftAtFront, frustumBottomRightAtFront)));
+        float2 frustumMaxXY = max(frustumTopLeftAtBack, max(frustumBottomRightAtBack, max(frustumTopLeftAtFront, frustumBottomRightAtFront)));
+
+        float3 frustumAABBMin = float3(frustumMinXY.x, frustumMinXY.y, -eyeMinZ);
+        float3 frustumAABBMax = float3(frustumMaxXY.x, frustumMaxXY.y, -eyeMaxZ);
+
+        frustumAABBMid = (frustumAABBMin + frustumAABBMax) * 0.5f;
+        frustumAABBHalfSize = abs(frustumAABBMax - frustumAABBMin) * 0.5f;
+    }
+
+    {
+        uint tileIdxFlattened = groupIdx.x + groupIdx.y * g_TileNumX;
+        uint startOffset = g_PreClusterMaxNumElements * tileIdxFlattened;
+        uint ldsLightIdxCounter = 0;
+        for (uint i = 0; i < g_CullTestSpheresNum; i++)
+        {
+            float4 p = g_TestSpheresBuffer[i];
+            float  r = p.w;
+            float3 c = mul(UNITY_MATRIX_V, float4(p.xyz, 1)).xyz;
+            if (TestSphereVsAABB(c, r, frustumAABBMid, frustumAABBHalfSize))
+            {
+                g_CullIndexBufferOut[startOffset + 1 + ldsLightIdxCounter] = i;
+                ldsLightIdxCounter++;
+            }
+            if (ldsLightIdxCounter == g_PreClusterMaxNumIndex)
+                break;
+        }
+        g_CullIndexBufferOut[startOffset] = ldsLightIdxCounter;
+    }
+}
