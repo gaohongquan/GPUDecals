@@ -17,8 +17,8 @@ namespace Yunchang
         {
             _instance = this;
         }
-
-        void OnDisable()
+        
+        void OnDestroy()
         {
             _instance = null;
         }

@@ -10,6 +10,7 @@ namespace Yunchang
     public class RendererFeatures : MonoBehaviour
     {
         const int _MAX_ADDITIVE_DECAL_COUNT = 1024;
+        const int _MAX_PER_CLUSTER_DECAL_COUTN = 8;
 
         public ComputeShader ClusterCS;
         [Range(0, 1)]
@@ -119,12 +120,12 @@ namespace Yunchang
                 if (index < activeDecalRenderers.Count)
                     _DecalDrawData.visibleDecalRenderers.Add(activeDecalRenderers[index]);
             }
-            //_DecalDrawData.visibleDecalRenderers.Clear();
-            //_DecalDrawData.visibleDecalRenderers.AddRange(activeDecalRenderers);
-            _DecalDrawData.visibleDecalRenderers.Sort(_DecalsSortComparer);
+            _DecalDrawData.visibleDecalRenderers.Clear();
+            _DecalDrawData.visibleDecalRenderers.AddRange(activeDecalRenderers);
+            //_DecalDrawData.visibleDecalRenderers.Sort(_DecalsSortComparer);
             _DecalDrawData.decalBaseMap = DecalsManager.Instance.decalBaseTexture;
             _DecalDrawData.decalNormalMap = DecalsManager.Instance.decalNormalTexture;
-            _DecalDrawData.perClusterMaxDecalCount = 8;
+            _DecalDrawData.perClusterMaxDecalCount = _MAX_PER_CLUSTER_DECAL_COUTN;
         }
 
         void OnPreRender()
@@ -161,22 +162,17 @@ namespace Yunchang
 
             if(IsSceneViewCamera(_Camera))
             {
-                Shader.EnableKeyword("_STRUCTURED_BUFFER_SUPPORT");
                 Shader.DisableKeyword("_CULLING_CLUSTER_ON");
                 _ClusterPrepass.enable = false;
                 _DecalsRenderer.enable = true;
                 _DecalsRenderer.clusterEnable = false;
-                _DecalsRenderer.structBufferEnable = true;
                 return;
             }
-#if !UNITY_EDITOR
-
-            Shader.EnableKeyword("_STRUCTURED_BUFFER_SUPPORT");
+#if UNITY_EDITOR
             Shader.DisableKeyword("_CULLING_CLUSTER_ON");
             _ClusterPrepass.enable = false;
             _DecalsRenderer.enable = true;
             _DecalsRenderer.clusterEnable = false;
-            _DecalsRenderer.structBufferEnable = true;
 #else
 
             if (!_SupportsComputeShaders)
@@ -185,12 +181,10 @@ namespace Yunchang
                 return;
                 
             }
-            Shader.EnableKeyword("_STRUCTURED_BUFFER_SUPPORT");
             Shader.EnableKeyword("_CULLING_CLUSTER_ON");
             _ClusterPrepass.enable = true;
             _DecalsRenderer.enable = true;
             _DecalsRenderer.clusterEnable = true;
-            _DecalsRenderer.structBufferEnable = true;
 #endif
         }
 

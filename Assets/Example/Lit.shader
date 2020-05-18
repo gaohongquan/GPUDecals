@@ -93,9 +93,7 @@
         #pragma surface surf CustomLitGI fullforwardshadows /*vertex:vert*/
         #pragma target 4.5
         #pragma multi_compile _ _ADDITIONAL_DECALS
-        #pragma multi_compile _ _ADDITIONAL_LIGHTS
         #pragma multi_compile _ _CULLING_CLUSTER_ON
-        #pragma multi_compile _ _STRUCTURED_BUFFER_SUPPORT
         ENDCG
     }
 
@@ -109,7 +107,6 @@
         #pragma surface surf CustomLitGI fullforwardshadows /*vertex:vert*/
         #pragma target 3.0
         #pragma multi_compile _ _ADDITIONAL_DECALS
-        #pragma multi_compile _ _ADDITIONAL_LIGHTS
         ENDCG
     }
 
