@@ -25,7 +25,7 @@ namespace Yunchang
         CullingGroup _DecalCulling;
         BoundingSphere[] _DecalSphereCache;
         List<int> _VisibleDecalIndexCahce = new List<int>();
-        int[] _VisibleDecalIndex;
+        //int[] _VisibleDecalIndex;
 
         Camera _Camera;
         bool _SupportsComputeShaders;
@@ -42,7 +42,7 @@ namespace Yunchang
             _Camera = GetComponent<Camera>();
 
             _DecalSphereCache = new BoundingSphere[_MAX_ADDITIVE_DECAL_COUNT];
-            _VisibleDecalIndex = new int[_MAX_ADDITIVE_DECAL_COUNT];
+            //_VisibleDecalIndex = new int[_MAX_ADDITIVE_DECAL_COUNT];
             _DecalCulling = new CullingGroup();
             _DecalCulling.targetCamera = _Camera;
             _DecalCulling.SetBoundingSpheres(_DecalSphereCache);
