@@ -36,13 +36,13 @@ namespace Yunchang
             _CullAABBsBufferOutId = Shader.PropertyToID("g_CullAABBsBufferOut");
 
             _cb = new CommandBuffer { name = "Cluster Prepass"};
-            rendererFeatures.rawCamera.AddCommandBuffer(CameraEvent.AfterForwardOpaque, _cb);
+            rendererFeatures.rawCamera.AddCommandBuffer(CameraEvent.BeforeForwardOpaque, _cb);
         }
 
         public override void Release()
         {
             base.Release();
-            rendererFeatures.rawCamera.RemoveCommandBuffer(CameraEvent.AfterForwardOpaque, _cb);
+            rendererFeatures.rawCamera.RemoveCommandBuffer(CameraEvent.BeforeForwardOpaque, _cb);
             _cb.Dispose();
         }
 

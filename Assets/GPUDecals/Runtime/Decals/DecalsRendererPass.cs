@@ -61,13 +61,13 @@ namespace Yunchang
             _normalIntensitys = new float[_MAX_VISIBLE_DECAL_COUNT];
 
             _cb = new CommandBuffer { name = "Decals Renderer" };
-            rendererFeatures.rawCamera.AddCommandBuffer(CameraEvent.AfterForwardOpaque, _cb);
+            rendererFeatures.rawCamera.AddCommandBuffer(CameraEvent.BeforeForwardOpaque, _cb);
         }
 
         public override void Release()
         {
             base.Release();
-            rendererFeatures.rawCamera.RemoveCommandBuffer(CameraEvent.AfterForwardOpaque, _cb);
+            rendererFeatures.rawCamera.RemoveCommandBuffer(CameraEvent.BeforeForwardOpaque, _cb);
             _cb.Dispose();
         }
 

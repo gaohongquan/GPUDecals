@@ -24,6 +24,7 @@ namespace Yunchang
 
         CullingGroup _DecalCulling;
         BoundingSphere[] _DecalSphereCache;
+        List<int> _VisibleDecalIndexCahce = new List<int>();
         int[] _VisibleDecalIndex;
 
         Camera _Camera;
@@ -46,6 +47,8 @@ namespace Yunchang
             _DecalCulling.targetCamera = _Camera;
             _DecalCulling.SetBoundingSpheres(_DecalSphereCache);
             _DecalCulling.SetBoundingSphereCount(0);
+            _DecalCulling.onStateChanged += OnDecalCullingChanged;
+            _VisibleDecalIndexCahce.Clear();
 
             _ClusterPrepass = new ClusterPrepass { rendererFeatures = this };
             _ClusterPrepass.Initialize();
@@ -58,6 +61,7 @@ namespace Yunchang
             if(_DecalCulling != null)
             {
                 _DecalCulling.Dispose();
+                _DecalCulling.onStateChanged -= OnDecalCullingChanged;
                 _DecalCulling = null;
             }
             if (_ClusterPrepass != null)
@@ -77,6 +81,14 @@ namespace Yunchang
         {
             UpdateCameraCluster();
             UpdateDeclasRendering();
+        }
+
+        void OnDecalCullingChanged(CullingGroupEvent sphere)
+        {
+            if (sphere.isVisible && !_VisibleDecalIndexCahce.Contains(sphere.index))
+                _VisibleDecalIndexCahce.Add(sphere.index);
+            else if (!sphere.isVisible && _VisibleDecalIndexCahce.Contains(sphere.index))
+                _VisibleDecalIndexCahce.Remove(sphere.index);
         }
 
         void UpdateCameraCluster()
@@ -100,14 +112,15 @@ namespace Yunchang
                 _DecalSphereCache[i].radius = sphere.w;
             }
             _DecalCulling.SetBoundingSphereCount(maxDecalCount);
-            int visibleCount = _DecalCulling.QueryIndices(true, _VisibleDecalIndex, 0);
-            _DecalDrawData.visibleDecalRenderers.Clear();
+            int visibleCount = _VisibleDecalIndexCahce.Count; //_DecalCulling.QueryIndices(true, _VisibleDecalIndex, 0);
             for (int i = 0; i < visibleCount; i++)
             {
-                _DecalDrawData.visibleDecalRenderers.Add(activeDecalRenderers[_VisibleDecalIndex[i]]);
+                int index = _VisibleDecalIndexCahce[i];
+                if (index < activeDecalRenderers.Count)
+                    _DecalDrawData.visibleDecalRenderers.Add(activeDecalRenderers[index]);
             }
-            _DecalDrawData.visibleDecalRenderers.Clear();
-            _DecalDrawData.visibleDecalRenderers.AddRange(activeDecalRenderers);
+            //_DecalDrawData.visibleDecalRenderers.Clear();
+            //_DecalDrawData.visibleDecalRenderers.AddRange(activeDecalRenderers);
             _DecalDrawData.visibleDecalRenderers.Sort(_DecalsSortComparer);
             _DecalDrawData.decalBaseMap = DecalsManager.Instance.decalBaseTexture;
             _DecalDrawData.decalNormalMap = DecalsManager.Instance.decalNormalTexture;
@@ -179,7 +192,6 @@ namespace Yunchang
             _DecalsRenderer.clusterEnable = true;
             _DecalsRenderer.structBufferEnable = true;
 #endif
-
         }
 
         class DecalsSortComparer : IComparer<DecalRenderer>
