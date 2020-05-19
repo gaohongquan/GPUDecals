@@ -6,13 +6,6 @@
 //#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Input.hlsl"
 #include "UnityCG.cginc"
 
-
-struct AABB
-{
-    float4 min;
-    float4 max;
-};
-
 CBUFFER_START(_cluster_)
     uint g_ClusterNumX;
     uint g_ClusterNumY;
@@ -32,16 +25,6 @@ CBUFFER_START(_index_)
         uint g_PreClusterMaxNumIndex;
         uint g_CullTestSpheresNum;
 CBUFFER_END
-
-RWStructuredBuffer<AABB>   g_CullAABBsBufferOut;
-RWStructuredBuffer<int>   g_CullIndexBufferOut;
-
-StructuredBuffer<float4>   g_TestSpheresBuffer;
-StructuredBuffer<AABB>   g_CullAABBsBuffer;
-
-Texture2D                   _CameraDepthTexture;
-Texture2D					_DepthBounds;
-RWTexture2D<float4>         _DepthBoundsOut;
 
 float ComputeSquaredDistanceToAABB(float3 Pos, float3 AABBCenter, float3 AABBHalfSize)
 {

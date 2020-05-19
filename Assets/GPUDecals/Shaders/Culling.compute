@@ -8,6 +8,22 @@
 #pragma kernel CalculateDepthBoundsCS NUM_THREADS=8
 #pragma kernel TilebasedCullingCS NUM_THREADS=1
 
+struct AABB
+{
+    float4 min;
+    float4 max;
+};
+
+RWStructuredBuffer<AABB>   g_CullAABBsBufferOut;
+RWStructuredBuffer<int>   g_CullIndexBufferOut;
+
+StructuredBuffer<float4>   g_TestSpheresBuffer;
+StructuredBuffer<AABB>   g_CullAABBsBuffer;
+
+Texture2D                   _CameraDepthTexture;
+Texture2D					_DepthBounds;
+RWTexture2D<float4>         _DepthBoundsOut;
+
 groupshared float ldsZMin[NUM_THREADS * NUM_THREADS];
 groupshared float ldsZMax[NUM_THREADS * NUM_THREADS];
 

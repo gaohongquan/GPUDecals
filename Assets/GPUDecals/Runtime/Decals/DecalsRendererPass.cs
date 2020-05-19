@@ -11,6 +11,8 @@ namespace Yunchang
 {
     public class DecalsRendererPass : BaseRendererPass
     {
+        const int _MAX_VISIBLE_DECAL_COUNT = 128;
+
         int _AdditiveDecalCountId;
         int _DecalBaseMapId;
         int _DecalNormalMapId;
@@ -25,6 +27,12 @@ namespace Yunchang
         int _DecalClusterMaxNumElementsId;
 
         CommandBuffer _cb;
+
+
+        Matrix4x4[] _worldToLocals;
+        Vector4[] _uvs;
+        float[] _alphas;
+        float[] _normalIntensitys;
 
         public bool clusterEnable { get; set; }
         public DecalDrawData decalDrawData { get; set; }
@@ -46,6 +54,11 @@ namespace Yunchang
             _AdditiveDecalIndexBufferOutId = Shader.PropertyToID("g_CullIndexBufferOut");
             _AdditiveDecalIndexBuffer = Shader.PropertyToID("g_AdditiveDecalIndexBuffer");
             _DecalClusterMaxNumElementsId = Shader.PropertyToID("g_DecalClusterMaxNumElements");
+
+            _worldToLocals = new Matrix4x4[_MAX_VISIBLE_DECAL_COUNT];
+            _uvs = new Vector4[_MAX_VISIBLE_DECAL_COUNT];
+            _alphas = new float[_MAX_VISIBLE_DECAL_COUNT];
+            _normalIntensitys = new float[_MAX_VISIBLE_DECAL_COUNT];
 
             _cb = new CommandBuffer { name = "Decals Renderer" };
             rendererFeatures.rawCamera.AddCommandBuffer(CameraEvent.BeforeForwardOpaque, _cb);
@@ -74,16 +87,19 @@ namespace Yunchang
             }
 
             _cb.EnableShaderKeyword("_ADDITIONAL_DECALS");
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+            int visibleCount = Mathf.Min(_MAX_VISIBLE_DECAL_COUNT, decalDrawData.visibleDecalRenderers.Count);
+#else
             int visibleCount = decalDrawData.visibleDecalRenderers.Count;
+#endif
             if (clusterEnable)
-            {
                 ClusterDecals(visibleCount);
-                DrawStructBuffer(visibleCount);
-            }
-            else
-            {
-                DrawStructBuffer(visibleCount);
-            }
+#if UNITY_ANDROID && !UNITY_EDITOR
+            DrawConstantBuffer(visibleCount);
+#else
+            DrawStructBuffer(visibleCount);
+#endif
 
             var decalBaseMap = new RenderTargetIdentifier(decalDrawData.decalBaseMap);
             var decalNormalMap = new RenderTargetIdentifier(decalDrawData.decalNormalMap);
@@ -150,6 +166,22 @@ namespace Yunchang
             _cb.SetGlobalBuffer("g_AdditiveDecalDatasBuffer", decalDatasBuffer);
             _cb.SetGlobalInt(_AdditiveDecalCountId, visibleCount);
             bufferData.Dispose();
+        }
+
+        private void DrawConstantBuffer(int visibleCount)
+        {
+            for (int i = 0; i < visibleCount; i++)
+            {
+                _worldToLocals[i] = decalDrawData.visibleDecalRenderers[i].transform.worldToLocalMatrix;
+                _uvs[i] = decalDrawData.visibleDecalRenderers[i].uv;
+                _alphas[i] = decalDrawData.visibleDecalRenderers[i].alpha;
+                _normalIntensitys[i] = decalDrawData.visibleDecalRenderers[i].normalIntensity;
+            }
+            _cb.SetGlobalMatrixArray("g_DecalWorldToLocals", _worldToLocals);
+            _cb.SetGlobalVectorArray("g_Decaluvs", _uvs);
+            _cb.SetGlobalFloatArray("g_DecalAlphas", _alphas);
+            _cb.SetGlobalFloatArray("g_DecalNormalIntensitys", _normalIntensitys);
+            _cb.SetGlobalInt(_AdditiveDecalCountId, visibleCount);
         }
 
         struct DecalData

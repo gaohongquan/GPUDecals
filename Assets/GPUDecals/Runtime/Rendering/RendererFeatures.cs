@@ -120,9 +120,7 @@ namespace Yunchang
                 if (index < activeDecalRenderers.Count)
                     _DecalDrawData.visibleDecalRenderers.Add(activeDecalRenderers[index]);
             }
-            _DecalDrawData.visibleDecalRenderers.Clear();
-            _DecalDrawData.visibleDecalRenderers.AddRange(activeDecalRenderers);
-            //_DecalDrawData.visibleDecalRenderers.Sort(_DecalsSortComparer);
+            _DecalDrawData.visibleDecalRenderers.Sort(_DecalsSortComparer);
             _DecalDrawData.decalBaseMap = DecalsManager.Instance.decalBaseTexture;
             _DecalDrawData.decalNormalMap = DecalsManager.Instance.decalNormalTexture;
             _DecalDrawData.perClusterMaxDecalCount = _MAX_PER_CLUSTER_DECAL_COUTN;

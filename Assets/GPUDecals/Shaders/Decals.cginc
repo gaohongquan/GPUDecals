@@ -19,6 +19,8 @@ struct DecalInput
 sampler2D g_DecalBaseMap;
 sampler2D g_DecalNormalMap;
 
+#define _MAX_DECALDATA_SIZE 128
+
 #if defined(_CULLING_CLUSTER_ON)
 #include "Culling.cginc"
 uint g_DecalClusterMaxNumElements;
@@ -26,8 +28,31 @@ StructuredBuffer<uint> g_AdditiveDecalIndexBuffer;
 #endif
 
 uint g_AdditiveDecalCount;
-StructuredBuffer<DecalData> g_AdditiveDecalDatasBuffer;
 
+#if (defined(SHADER_API_GLES) || defined(SHADER_API_GLES3)) && defined(SHADER_API_MOBILE)
+CBUFFER_START(_DecalDatasBuffer)
+float4x4 g_DecalWorldToLocals[_MAX_DECALDATA_SIZE];
+float4 g_Decaluvs[_MAX_DECALDATA_SIZE];
+float g_DecalAlphas[_MAX_DECALDATA_SIZE];
+float g_DecalNormalIntensitys[_MAX_DECALDATA_SIZE];
+CBUFFER_END
+#else
+StructuredBuffer<DecalData> g_AdditiveDecalDatasBuffer;
+#endif
+
+DecalData GetDecalData(uint index)
+{
+#if (defined(SHADER_API_GLES) || defined(SHADER_API_GLES3)) && defined(SHADER_API_MOBILE)
+	DecalData decal;
+	decal.worldToLocal = g_DecalWorldToLocals[index];
+	decal.uv = g_Decaluvs[index];
+	decal.alpha = g_DecalAlphas[index];
+	decal.normalIntensity = g_DecalNormalIntensitys[index];
+	return decal;
+#else
+	return g_AdditiveDecalDatasBuffer[index];
+#endif
+}
 
 int CheckAdditionalDecal(float4x4 worldToDecalMatrix, DecalInput input,out float2 decaluv)
 {
@@ -74,23 +99,24 @@ void AdditionalDetal(DecalInput input,inout half3 albedo,inout float3 normalTS)
 #else
 	depth = Linear01Depth(screenPos.z);
 #endif
-	if (depth / g_zCullingRange > 1 )return;
-	int cIndex = GetClusterIndex(screenPos.xy, depth);
+
+	int depthCheck = step(depth / g_zCullingRange, 1);
+	int cIndex = GetClusterIndex(screenPos.xy, depth) * depthCheck;
 	int nStartIndex = cIndex * g_DecalClusterMaxNumElements;
-	int nDecalCount = g_AdditiveDecalIndexBuffer[nStartIndex];
+	int nDecalCount = g_AdditiveDecalIndexBuffer[nStartIndex] * depthCheck;
 	nStartIndex += 1;
 	nDecalCount = nStartIndex + nDecalCount;
 	[loop]
 	for (uint i = nStartIndex; i < nDecalCount; i++)
 	{
-		DecalData decal = g_AdditiveDecalDatasBuffer[g_AdditiveDecalIndexBuffer[i]];
+		DecalData decal = GetDecalData(g_AdditiveDecalIndexBuffer[i]);
 		AdditionalDetalData(decal, input, albedo, normalTS);
 	}
 #else
 	[loop]
 	for (int i = 0; i < g_AdditiveDecalCount; i++)
 	{
-		DecalData decal = g_AdditiveDecalDatasBuffer[i];
+		DecalData decal = GetDecalData(i);
 		AdditionalDetalData(decal, input, albedo, normalTS);
 	}
 #endif
