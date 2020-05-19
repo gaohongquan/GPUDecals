@@ -28,7 +28,7 @@ namespace Yunchang
 
         CommandBuffer _cb;
 
-
+        Vector4[] _decalTestSpheres;
         Matrix4x4[] _worldToLocals;
         Vector4[] _uvs;
         float[] _alphas;
@@ -55,10 +55,13 @@ namespace Yunchang
             _AdditiveDecalIndexBuffer = Shader.PropertyToID("g_AdditiveDecalIndexBuffer");
             _DecalClusterMaxNumElementsId = Shader.PropertyToID("g_DecalClusterMaxNumElements");
 
+#if UNITY_ANDROID && !UNITY_EDITOR
+            _decalTestSpheres = new Vector4[_MAX_VISIBLE_DECAL_COUNT];
             _worldToLocals = new Matrix4x4[_MAX_VISIBLE_DECAL_COUNT];
             _uvs = new Vector4[_MAX_VISIBLE_DECAL_COUNT];
             _alphas = new float[_MAX_VISIBLE_DECAL_COUNT];
             _normalIntensitys = new float[_MAX_VISIBLE_DECAL_COUNT];
+#endif
 
             _cb = new CommandBuffer { name = "Decals Renderer" };
             rendererFeatures.rawCamera.AddCommandBuffer(CameraEvent.BeforeForwardOpaque, _cb);
@@ -111,17 +114,28 @@ namespace Yunchang
         {
             if (clusterData.CullingCS == null)
                 return;
+            int clusterCullingKernel = clusterData.CullingCS.FindKernel("ClusterCullingCS");
+            int maxNumElements = decalDrawData.perClusterMaxDecalCount + 1;
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+            for (int i=0; i<visibleCount; i++)
+            {
+                _decalTestSpheres[i] = decalDrawData.visibleDecalRenderers[i].sphere;
+            }
+            _cb.SetComputeVectorArrayParam(clusterData.CullingCS,_DecalSpheresBufferId, _decalTestSpheres);
+#else
+
             NativeArray<float4> decalSpheres = new NativeArray<float4>(visibleCount, Allocator.Temp);
             for (int i = 0; i < visibleCount; i++)
             {
                 decalSpheres[i] = decalDrawData.visibleDecalRenderers[i].sphere;
             }
-            int clusterCullingKernel = clusterData.CullingCS.FindKernel("ClusterCullingCS");
-            int maxNumElements = decalDrawData.perClusterMaxDecalCount + 1;
-
             var decalSpheresCB = rendererFeatures.bufferCache.Alloc<Vector4>("_DecalSpheresBufferId", visibleCount);
             decalSpheresCB.SetData(decalSpheres,0, 0, visibleCount);
-
+            decalSpheres.Dispose();
+            _cb.SetComputeBufferParam(clusterData.CullingCS, clusterCullingKernel,
+                _DecalSpheresBufferId, decalSpheresCB);
+#endif
             var decalIndesBuffer = rendererFeatures.bufferCache.Alloc<int>(ComputeBufferID.AdditiveDecalIndexBufferID,
                 maxNumElements * clusterData.clusterDimensions.count);
 
@@ -131,8 +145,6 @@ namespace Yunchang
 
             _cb.SetComputeBufferParam(clusterData.CullingCS, clusterCullingKernel,
                 _CullAABBsBufferId, rendererFeatures.bufferCache.Get(ComputeBufferID.CullAABBsBufferID));
-            _cb.SetComputeBufferParam(clusterData.CullingCS, clusterCullingKernel,
-                _DecalSpheresBufferId, decalSpheresCB);
             _cb.SetComputeBufferParam(clusterData.CullingCS, clusterCullingKernel,
                 _AdditiveDecalIndexBufferOutId, decalIndesBuffer);
 
@@ -144,7 +156,7 @@ namespace Yunchang
             _cb.SetGlobalInt(_DecalClusterMaxNumElementsId, maxNumElements);
             _cb.SetGlobalBuffer(_AdditiveDecalIndexBuffer, decalIndesBuffer);
 
-            decalSpheres.Dispose();
+            
         }
 
         private void DrawStructBuffer(int visibleCount)

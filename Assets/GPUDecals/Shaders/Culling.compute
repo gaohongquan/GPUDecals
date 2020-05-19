@@ -1,6 +1,7 @@
 
 #include "Culling.cginc"
 
+#define _MOBILE_MAX_DECALDATA_SIZE 128
 #define FLT_MAX  3.402823466e+38
 
 #pragma kernel GenerateClusterCS NUM_THREADS=1
@@ -17,7 +18,14 @@ struct AABB
 RWStructuredBuffer<AABB>   g_CullAABBsBufferOut;
 RWStructuredBuffer<int>   g_CullIndexBufferOut;
 
+#if (defined(SHADER_API_GLES) || defined(SHADER_API_GLES3)) && defined(SHADER_API_MOBILE)
+CBUFFER_START(_TestSphereBuffer)
+float4 g_TestSpheresBuffer[_MOBILE_MAX_DECALDATA_SIZE];
+CBUFFER_END
+#else
 StructuredBuffer<float4>   g_TestSpheresBuffer;
+#endif
+
 StructuredBuffer<AABB>   g_CullAABBsBuffer;
 
 Texture2D                   _CameraDepthTexture;

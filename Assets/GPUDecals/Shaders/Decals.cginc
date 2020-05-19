@@ -19,7 +19,7 @@ struct DecalInput
 sampler2D g_DecalBaseMap;
 sampler2D g_DecalNormalMap;
 
-#define _MAX_DECALDATA_SIZE 128
+#define _MOBILE_MAX_DECALDATA_SIZE 128
 
 #if defined(_CULLING_CLUSTER_ON)
 #include "Culling.cginc"
@@ -31,10 +31,10 @@ uint g_AdditiveDecalCount;
 
 #if (defined(SHADER_API_GLES) || defined(SHADER_API_GLES3)) && defined(SHADER_API_MOBILE)
 CBUFFER_START(_DecalDatasBuffer)
-float4x4 g_DecalWorldToLocals[_MAX_DECALDATA_SIZE];
-float4 g_Decaluvs[_MAX_DECALDATA_SIZE];
-float g_DecalAlphas[_MAX_DECALDATA_SIZE];
-float g_DecalNormalIntensitys[_MAX_DECALDATA_SIZE];
+float4x4 g_DecalWorldToLocals[_MOBILE_MAX_DECALDATA_SIZE];
+float4 g_Decaluvs[_MOBILE_MAX_DECALDATA_SIZE];
+float g_DecalAlphas[_MOBILE_MAX_DECALDATA_SIZE];
+float g_DecalNormalIntensitys[_MOBILE_MAX_DECALDATA_SIZE];
 CBUFFER_END
 #else
 StructuredBuffer<DecalData> g_AdditiveDecalDatasBuffer;

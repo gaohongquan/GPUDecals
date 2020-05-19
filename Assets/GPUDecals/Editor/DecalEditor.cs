@@ -31,6 +31,8 @@ namespace Yunchang
         private static Sprite[] _Sprites;
         private void OnEnable()
         {
+            if (DecalsManager.Instance == null)
+                return;
             if (DecalsManager.Instance.decalBaseTexture != null)
                 _Sprites = GetSprites(DecalsManager.Instance.decalBaseTexture);
         }

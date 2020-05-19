@@ -10,6 +10,9 @@ public class Demo : MonoBehaviour
     public Button leftButton;
     public Button rightButton;
 
+    int iFrameCount;
+    float fDeltaTimeSum;
+
     // Start is called before the first frame update
     void Start()
     {
@@ -21,11 +24,21 @@ public class Demo : MonoBehaviour
         {
             camera.transform.rotation *= Quaternion.AngleAxis(-5, Vector3.up);
         });
+        iFrameCount = 0;
+        fDeltaTimeSum = 0;
     }
 
     // Update is called once per frame
     void Update()
     {
-        fpsText.text = string.Format("FPS:{0:f2}", 1.0f / Time.unscaledDeltaTime);
+        fDeltaTimeSum += Time.unscaledDeltaTime;
+        iFrameCount++;
+        if (fDeltaTimeSum > 1.0f)
+        {
+            fpsText.text = string.Format("FPS:{0}", iFrameCount);
+            iFrameCount = 0;
+            fDeltaTimeSum = fDeltaTimeSum - 1.0f;
+        }
     }
+
 }
