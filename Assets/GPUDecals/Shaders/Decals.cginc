@@ -5,6 +5,7 @@ struct DecalData
 {
 	float4x4 worldToLocal;
 	float4 uv;
+	float2 tiling;
 	float alpha;
 	float normalIntensity;
 };
@@ -33,8 +34,7 @@ uint g_AdditiveDecalCount;
 CBUFFER_START(_DecalDatasBuffer)
 float4x4 g_DecalWorldToLocals[_MOBILE_MAX_DECALDATA_SIZE];
 float4 g_Decaluvs[_MOBILE_MAX_DECALDATA_SIZE];
-float g_DecalAlphas[_MOBILE_MAX_DECALDATA_SIZE];
-float g_DecalNormalIntensitys[_MOBILE_MAX_DECALDATA_SIZE];
+float2 g_Mixs[_MOBILE_MAX_DECALDATA_SIZE];
 CBUFFER_END
 #else
 StructuredBuffer<DecalData> g_AdditiveDecalDatasBuffer;
@@ -46,8 +46,9 @@ DecalData GetDecalData(uint index)
 	DecalData decal;
 	decal.worldToLocal = g_DecalWorldToLocals[index];
 	decal.uv = g_Decaluvs[index];
-	decal.alpha = g_DecalAlphas[index];
-	decal.normalIntensity = g_DecalNormalIntensitys[index];
+	decaluv.tiling = g_Mixs[index].xy;
+	decal.alpha = g_Mixs[index].z;
+	decal.normalIntensity = g_Mixs[index].w;
 	return decal;
 #else
 	return g_AdditiveDecalDatasBuffer[index];
@@ -71,7 +72,7 @@ int CheckAdditionalDecal(float4x4 worldToDecalMatrix, DecalInput input,out float
 
 void AdditionDecal(DecalData decal, float2 decaluv, inout half3 albedo, inout float3 normalTS)
 {
-	float2 texcoord = decaluv.xy + 0.5;
+	float2 texcoord = frac((decaluv.xy + 0.5) * decal.tiling);
 	float2 uv = lerp(decal.uv.xy, decal.uv.zw, texcoord.xy);
 
 	half4 col = tex2D(g_DecalBaseMap, uv);

@@ -31,8 +31,7 @@ namespace Yunchang
         Vector4[] _decalTestSpheres;
         Matrix4x4[] _worldToLocals;
         Vector4[] _uvs;
-        float[] _alphas;
-        float[] _normalIntensitys;
+        Vector4[] _mixs; //xy:tiling,z:alpha,w:normalIntensity
 
         public bool clusterEnable { get; set; }
         public DecalDrawData decalDrawData { get; set; }
@@ -59,8 +58,7 @@ namespace Yunchang
             _decalTestSpheres = new Vector4[_MAX_VISIBLE_DECAL_COUNT];
             _worldToLocals = new Matrix4x4[_MAX_VISIBLE_DECAL_COUNT];
             _uvs = new Vector4[_MAX_VISIBLE_DECAL_COUNT];
-            _alphas = new float[_MAX_VISIBLE_DECAL_COUNT];
-            _normalIntensitys = new float[_MAX_VISIBLE_DECAL_COUNT];
+            _mixs = new Vector4[_MAX_VISIBLE_DECAL_COUNT];
 #endif
 
             _cb = new CommandBuffer { name = "Decals Renderer" };
@@ -169,6 +167,7 @@ namespace Yunchang
                 _data.alpha = decalDrawData.visibleDecalRenderers[i].alpha;
                 _data.normalIntensity = decalDrawData.visibleDecalRenderers[i].normalIntensity;
                 _data.uv = decalDrawData.visibleDecalRenderers[i].uv;
+                _data.tiling = decalDrawData.visibleDecalRenderers[i].tiling;
                 bufferData[i] = _data;
             }
 
@@ -186,13 +185,14 @@ namespace Yunchang
             {
                 _worldToLocals[i] = decalDrawData.visibleDecalRenderers[i].transform.worldToLocalMatrix;
                 _uvs[i] = decalDrawData.visibleDecalRenderers[i].uv;
-                _alphas[i] = decalDrawData.visibleDecalRenderers[i].alpha;
-                _normalIntensitys[i] = decalDrawData.visibleDecalRenderers[i].normalIntensity;
+                _mixs[i].x = decalDrawData.visibleDecalRenderers[i].tiling.x;
+                _mixs[i].y = decalDrawData.visibleDecalRenderers[i].tiling.y;
+                _mixs[i].z = decalDrawData.visibleDecalRenderers[i].alpha;
+                _mixs[i].w = decalDrawData.visibleDecalRenderers[i].normalIntensity;
             }
             _cb.SetGlobalMatrixArray("g_DecalWorldToLocals", _worldToLocals);
             _cb.SetGlobalVectorArray("g_Decaluvs", _uvs);
-            _cb.SetGlobalFloatArray("g_DecalAlphas", _alphas);
-            _cb.SetGlobalFloatArray("g_DecalNormalIntensitys", _normalIntensitys);
+            _cb.SetGlobalVectorArray("g_Mixs", _mixs);
             _cb.SetGlobalInt(_AdditiveDecalCountId, visibleCount);
         }
 
@@ -200,6 +200,7 @@ namespace Yunchang
         {
             public float4x4 worldToLocal;
             public float4 uv;
+            public float2 tiling;
             public float alpha;
             public float normalIntensity;
         }

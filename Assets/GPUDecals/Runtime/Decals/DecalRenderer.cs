@@ -8,6 +8,7 @@ namespace Yunchang
     public class DecalRenderer : MonoBehaviour
     {
         public Sprite sprite;
+        public Vector2 tiling = Vector2.one;
         [Range(0, 1)]
         public float alpha = 1;
         [Range(0, 20)]
